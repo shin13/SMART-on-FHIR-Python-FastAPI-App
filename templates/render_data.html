@@ -1,17 +1,28 @@
-<!DOCTYPE html>
-<html>
-<head>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SMART on FHIR app with Python / FastAPI (Testing)</title>
-</head>
-<body>
-    <h1>Patient Health Data</h1>
-    <ul>
-        <li>Name: {{ data.Name }}</li>
-        <li>Gender: {{ data.Gender }}</li>
-        <li>Height: {{ data.Height }}</li>
-        <li>Weight: {{ data.Weight }}</li>
-        <li>BMI: {{ data.BMI }}</li>
-
-    </ul>
-</body>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div id="mainCtr">
+      <div id="headerCtr">
+        <h1>SMART on FHIR starter app</h1>
+      </div> <!-- 关闭 headerCtr -->
+      <div id="bodyCtr">
+        <h2>Basic Information</h2>
+        <table>
+          {% for key, value in data.items() %}
+          <tr>
+            <td>{{ key }}</td>
+            <td>{{ value }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div> <!-- 关闭 bodyCtr -->
+    </div> <!-- 关闭 mainCtr -->
+  </body>
+  <footer></footer>
 </html>
