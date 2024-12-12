@@ -1,17 +1,21 @@
-import json
-import requests
-from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+
+from fastapi import APIRouter, Depends
 from oauthlib.oauth2 import WebApplicationClient
 
 from app.configs.config import credentialSettings
 from app.middleware.exception import exception_message
+from app.middleware.function import fetch_observation
 
 
 router = APIRouter()
 client = WebApplicationClient(credentialSettings.CLIENT_ID)
 
+uvicorn_logger = logging.getLogger('uvicorn.error')
+system_logger = logging.getLogger('custom.error')
 
-@router.get("/heights", name="Get observation/heights", description="Get observation/heights (value + unit)")
+
+#### 依賴函數
 async def get_height(tokens):
 
     # Getting data in the way prescribed by OAuthLib package
@@ -21,46 +25,49 @@ async def get_height(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        observation = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
+        
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
 
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "Height data is not a valid number"
+                
+                return "Complete height data not found"
+            
+            except (KeyError, IndexError):
+                return "Height data format is incorrect"
+
+        # Single 
         try:
-            observation = observation.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if observation["resourceType"] == "OperationOutcome":
-            height = "No height data available due to OperationOutcome error"
-        else:
-            if observation["resourceType"] == "Bundle" and observation["total"] > 0:
-                entry = observation["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    height = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    height = "No valid height data available. Either there isn't a value or a unit."
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "Height data is not a valid number"
+            
+            return "No height data found"
+        
+        except Exception:
+            return "An unknown error occurred while processing height data"
 
-            else:
-                height = "No height data available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return height
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the height observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/weights", name="Get observation/weights", description="Get observation/weights (value + unit)")
 async def get_weight(tokens):
 
     # Getting data in the way prescribed by OAuthLib package
@@ -70,46 +77,49 @@ async def get_weight(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        observation = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "Weight data is not a valid number"
+                
+                return "Complete weight data not found"
+            
+            except (KeyError, IndexError):
+                return "Weight data format is incorrect"
+
+        # Single 
         try:
-            observation = observation.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if observation["resourceType"] == "OperationOutcome":
-            weight = "No weight data available due to OperationOutcome error"
-        else:
-            if observation["resourceType"] == "Bundle" and observation["total"] > 0:
-                entry = observation["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    weight = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    weight = "No valid weight data available. Either there isn't a value or a unit."
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "Weight data is not a valid number"
+            
+            return "No weight data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing weight data"
 
-            else:
-                weight = "No weight data available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return weight
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the weight observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/bmi", name="Get observation/body mass index (BMI)", description="Get observation/body mass index (BMI) (value + unit)")
 async def get_bmi(tokens):
 
     # Getting data in the way prescribed by OAuthLib package
@@ -119,46 +129,49 @@ async def get_bmi(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        observation = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "BMI data is not a valid number"
+                
+                return "Complete BMI data not found"
+            
+            except (KeyError, IndexError):
+                return "BMI data format is incorrect"
+
+        # Single 
         try:
-            observation = observation.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if observation["resourceType"] == "OperationOutcome":
-            bmi = "No Body Mass Index (BMI) data available due to OperationOutcome error"
-        else:
-            if observation["resourceType"] == "Bundle" and observation["total"] > 0:
-                entry = observation["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    bmi = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    bmi = "No valid Body Mass Index (BMI) data available. Either there isn't a value or a unit."
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "BMI data is not a valid number"
+            
+            return "No BMI data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing BMI data"
 
-            else:
-                bmi = "No Body Mass Index (BMI) data available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return bmi
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the BMI observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/bp", name="Get observation/blood pressure (BP)", description="Get observation/blood pressure (BP) (value + unit)")
 async def get_bp(tokens):
     # Getting data in the way prescribed by OAuthLib package
     uri, headers, body = client.add_token(
@@ -167,70 +180,92 @@ async def get_bp(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        blood_pressure = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
-        try:
-            blood_pressure = blood_pressure.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                components = entry.get("component", [])
+                
+                if len(components) >= 2:
+                    sys_component = components[0]
+                    dias_component = components[1]
 
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if blood_pressure["resourceType"] == "OperationOutcome":
-            sys_bp = (
-                "No systolic blood pressure available due to OperationOutcome error"
-            )
-            dias_bp = (
-                "No diastolic blood pressure available due to OperationOutcome error"
-            )
-        else:
-            if (
-                blood_pressure["resourceType"] == "Bundle"
-                and blood_pressure["total"] > 0
-            ):
-                entry = blood_pressure["entry"][0]
-                try:
-                    sys_value = entry["resource"]["component"][0]["valueQuantity"][
-                        "value"
-                    ]
-                    sys_unit = entry["resource"]["component"][0]["valueQuantity"][
-                        "unit"
-                    ]
-                    sys_bp = str(round(sys_value, 1)) + " " + sys_unit
-                except KeyError:
-                    sys_bp = "No valid systolic blood pressure available. Either there wasn't a value or a unit."
+                    sys_value = sys_component.get("valueQuantity", {}).get("value")
+                    sys_unit = sys_component.get("valueQuantity", {}).get("unit")
 
-                try:
-                    dias_value = entry["resource"]["component"][1]["valueQuantity"][
-                        "value"
-                    ]
-                    dias_unit = entry["resource"]["component"][1]["valueQuantity"][
-                        "unit"
-                    ]
-                    dias_bp = str(round(dias_value, 1)) + " " + dias_unit
-                except KeyError:
-                    dias_bp = "No valid diastolic blood pressure available. Either there wasn't a value or a unit."
+                    if sys_value is not None and sys_unit is not None:
+                        try:
+                            sys_bp = f"{float(round(sys_value, 1))} {sys_unit}"
+                        except (TypeError, ValueError):
+                            sys_bp = "Systolic blood pressure data is not a valid number"
+                    else:
+                        sys_bp = "Complete systolic blood pressure data not found"
 
-            else:
-                sys_bp = "No systolic blood pressure available due to empty bundle"
-                dias_bp = "No diastolic blood pressure available due to empty bundle"
+                    dias_value = dias_component.get("valueQuantity", {}).get("value")
+                    dias_unit = dias_component.get("valueQuantity", {}).get("unit")
 
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
+                    if dias_value is not None and dias_unit is not None:
+                        try:
+                            dias_bp = f"{float(round(dias_value, 1))} {dias_unit}"
+                        except (TypeError, ValueError):
+                            dias_bp = "Diastolic blood pressure data is not a valid number"
+                    else:
+                        dias_bp = "Complete diastolic blood pressure data not found"
 
-    return sys_bp, dias_bp
+                    return sys_bp, dias_bp
+                
+                return "Blood pressure components not found"
+            
+            except (KeyError, IndexError):
+                return "Blood pressure data format is incorrect"
+
+        # Single 
+        if obs_json.get("resourceType") == "Observation":
+            try:
+                components = obs_json.get("component", [])
+                
+                if len(components) >= 2:
+                    sys_component = components[0]
+                    dias_component = components[1]
+
+                    sys_value = sys_component.get("valueQuantity", {}).get("value")
+                    sys_unit = sys_component.get("valueQuantity", {}).get("unit")
+
+                    if sys_value is not None and sys_unit is not None:
+                        try:
+                            sys_bp = f"{float(round(sys_value, 1))} {sys_unit}"
+                        except (TypeError, ValueError):
+                            sys_bp = "Systolic blood pressure data is not a valid number"
+                    else:
+                        sys_bp = "Complete systolic blood pressure data not found"
+
+                    dias_value = dias_component.get("valueQuantity", {}).get("value")
+                    dias_unit = dias_component.get("valueQuantity", {}).get("unit")
+
+                    if dias_value is not None and dias_unit is not None:
+                        try:
+                            dias_bp = f"{float(round(dias_value, 1))} {dias_unit}"
+                        except (TypeError, ValueError):
+                            dias_bp = "Diastolic blood pressure data is not a valid number"
+                    else:
+                        dias_bp = "Complete diastolic blood pressure data not found"
+
+                    return sys_bp, dias_bp
+                
+                return "Blood pressure components not found"
+            
+            except Exception:
+                return "An unknown error occurred while processing blood pressure data"
+
+        return "No blood pressure data found"
+    
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the blood pressure observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/hdl", name="Get observation/hdl", description="Get observation/hdl (value + unit)")
 async def get_hdl(tokens):
 
     # Getting data in the way prescribed by OAuthLib package
@@ -240,48 +275,49 @@ async def get_hdl(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        hdl = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "HDL data is not a valid number"
+                
+                return "Complete HDL data not found"
+            
+            except (KeyError, IndexError):
+                return "HDL data format is incorrect"
+
+        # Single 
         try:
-            hdl = hdl.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if hdl["resourceType"] == "OperationOutcome":
-            good_chol = "No HDL available due to OperationOutcome error"
-        else:
-            if hdl["resourceType"] == "Bundle" and hdl["total"] > 0:
-                entry = hdl["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    good_chol = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    good_chol = (
-                        "No HDL available. Either there wasn't a value or a unit."
-                    )
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "HDL data is not a valid number"
+            
+            return "No HDL data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing HDL data"
 
-            else:
-                good_chol = "No HDL available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return good_chol
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the HDL observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/ldl", name="Get observation/ldl", description="Get observation/ldl (value + unit)")
 async def get_ldl(tokens):
     # Getting data in the way prescribed by OAuthLib package
     uri, headers, body = client.add_token(
@@ -290,48 +326,49 @@ async def get_ldl(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        ldl = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "LDL data is not a valid number"
+                
+                return "Complete LDL data not found"
+            
+            except (KeyError, IndexError):
+                return "LDL data format is incorrect"
+
+        # Single 
         try:
-            ldl = ldl.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if ldl["resourceType"] == "OperationOutcome":
-            bad_chol = "No LDL available due to OperationOutcome error"
-        else:
-            if ldl["resourceType"] == "Bundle" and ldl["total"] > 0:
-                entry = ldl["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    bad_chol = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    bad_chol = (
-                        "No LDL available. Either there wasn't a value or a unit."
-                    )
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "LDL data is not a valid number"
+            
+            return "No LDL data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing LDL data"
 
-            else:
-                bad_chol = "No LDL available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return bad_chol
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the LDL observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/tg", name="Get observation/triglycerides (TG)", description="Get observation/triglycerides (TG) (value + unit)")
 async def get_tg(tokens):
     # Getting data in the way prescribed by OAuthLib package
     uri, headers, body = client.add_token(
@@ -340,48 +377,49 @@ async def get_tg(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        tg = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "TG data is not a valid number"
+                
+                return "Complete TG data not found"
+            
+            except (KeyError, IndexError):
+                return "TG data format is incorrect"
+
+        # Single 
         try:
-            tg = tg.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if tg["resourceType"] == "OperationOutcome":
-            triglyceride = "No triglycerides available due to OperationOutcome error"
-        else:
-            if tg["resourceType"] == "Bundle" and tg["total"] > 0:
-                entry = tg["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    triglycerides = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    triglycerides = (
-                        "No triglycerides available. Either there wasn't a value or a unit."
-                    )
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "TG data is not a valid number"
+            
+            return "No TG data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing TG data"
 
-            else:
-                triglycerides = "No triglycerides available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return triglycerides
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the TG observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/cholesterol", name="Get observation/cholesterol", description="Get observation/cholesterol (value + unit)")
 async def get_chol(tokens):
     # Getting data in the way prescribed by OAuthLib package
     uri, headers, body = client.add_token(
@@ -390,48 +428,49 @@ async def get_chol(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        chol = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "Cholesterol data is not a valid number"
+                
+                return "Complete Cholesterol data not found"
+            
+            except (KeyError, IndexError):
+                return "Cholesterol data format is incorrect"
+
+        # Single 
         try:
-            chol = chol.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if chol["resourceType"] == "OperationOutcome":
-            cholesterol = "No cholesterol available due to OperationOutcome error"
-        else:
-            if chol["resourceType"] == "Bundle" and chol["total"] > 0:
-                entry = chol["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    cholesterol = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    cholesterol = (
-                        "No cholesterol available. Either there wasn't a value or a unit."
-                    )
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "Cholesterol data is not a valid number"
+            
+            return "No Cholesterol data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing Cholesterol data"
 
-            else:
-                cholesterol = "No cholesterol available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return cholesterol
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the Cholesterol observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/scr", name="Get observation/serum creatinine (Cr/SCr)", description="Get observation/serum creatinine (Cr/SCr) (value + unit)")
 async def get_scr(tokens):
     # Getting data in the way prescribed by OAuthLib package
     uri, headers, body = client.add_token(
@@ -440,48 +479,49 @@ async def get_scr(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        cr = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "Serum Creatinine data is not a valid number"
+                
+                return "Complete Serum Creatinine data not found"
+            
+            except (KeyError, IndexError):
+                return "Serum Creatinine data format is incorrect"
+
+        # Single 
         try:
-            cr = cr.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if cr["resourceType"] == "OperationOutcome":
-            cr = "No creatinine available due to OperationOutcome error"
-        else:
-            if cr["resourceType"] == "Bundle" and cr["total"] > 0:
-                entry = cr["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    cr = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    cr = (
-                        "No creatinine available. Either there wasn't a value or a unit."
-                    )
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "Serum Creatinine data is not a valid number"
+            
+            return "No Serum Creatinine data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing Serum Creatinine data"
 
-            else:
-                cr = "No creatinine available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return cr
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the Serum Creatinine observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/glucose", name="Get observation/glucose (blood sugar, BS)", description="Get observation/glucose (blood sugar, BS) (value + unit)")
 def get_glucose(tokens):
 
     # Getting data in the way prescribed by OAuthLib package
@@ -491,90 +531,151 @@ def get_glucose(tokens):
     )
 
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        glucose = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "Glucose data is not a valid number"
+                
+                return "Complete Glucose data not found"
+            
+            except (KeyError, IndexError):
+                return "Glucose data format is incorrect"
+
+        # Single 
         try:
-            glucose = glucose.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if glucose["resourceType"] == "OperationOutcome":
-            glucose = "No glucose available due to OperationOutcome error"
-        else:
-            if glucose["resourceType"] == "Bundle" and glucose["total"] > 0:
-                entry = glucose["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    value = entry["resource"]["valueQuantity"]["value"]
-                    unit = entry["resource"]["valueQuantity"]["unit"]
-                    glucose = str(round(value, 1)) + " " + unit
-                except KeyError:
-                    glucose = (
-                        "No glucose available. Either there wasn't a value or a unit."
-                    )
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "Glucose data is not a valid number"
+            
+            return "No Glucose data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing Glucose data"
 
-            else:
-                glucose = "No glucose available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return glucose
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the Glucose observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
-@router.get("/smoking-status", name="Get observation/smoking status", description="Get observation/smoking status")
 def get_smoking_status(tokens):
     # Getting data in the way prescribed by OAuthLib package
     uri, headers, body = client.add_token(
         f"{credentialSettings.BASE_URL}/Observation?patient={tokens['patient']}&category=survey&code=72166-2",
         headers={"Accept": "application/fhir+json"},
     )
-
     try:
-        # Getting data in the way prescribed by OAuthLib package
-        observation = requests.get(uri, headers=headers, data=body, timeout=10)
+        obs_json = fetch_observation(uri, headers, body)
 
+        # Bundle
+        if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
+            try:
+                entry = obs_json["entry"][0]["resource"]
+                value = entry.get("valueQuantity", {}).get("value")
+                unit = entry.get("valueQuantity", {}).get("unit")
+
+                if value is not None and unit is not None:
+                    try:
+                        result = float(round(value, 1))
+                        return f"{result} {unit}"
+                    except (TypeError, ValueError):
+                        return "Smoking Status data is not a valid number"
+                
+                return "Complete Smoking Status data not found"
+            
+            except (KeyError, IndexError):
+                return "Smoking Status data format is incorrect"
+
+        # Single 
         try:
-            observation = observation.json()
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                """
-                Observation data not returned in JSON format.  
-                You probably haven't set the correct scope permissions,  
-                or registered the app with the EHR vendor  
-                so that it has access to this resource in Read or Search mode.
-                """
-            ) from error
-
-        # Sometimes a resource is returned, but it doesn't have anything useful
-        if observation["resourceType"] == "OperationOutcome":
-            smoke = "No smoking status data available due to OperationOutcome error"
-        else:
-            if observation["resourceType"] == "Bundle" and observation["total"] > 0:
-                entry = observation["entry"][0]
+            value = obs_json.get("valueQuantity", {}).get("value")
+            unit = obs_json.get("valueQuantity", {}).get("unit")
+            
+            if value is not None and unit is not None:
                 try:
-                    smoke = entry["resource"]["valueCodeableConcept"]["text"]
-                except KeyError:
-                    smoke = "No valid data available."
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return "Smoking Status data is not a valid number"
+            
+            return "No Smoking Status data were found"
+        
+        except Exception:
+            return "An unknown error occurred while processing Smoking Status data"
 
-            else:
-                smoke = "No smoking status data available due to empty bundle"
-
-    except Exception as error:
-        raise ValueError(
-            f"Found the following error pulling Observation FHIR resource: {error}"
-        ) from error
-
-    return smoke
+    except Exception as e:
+        system_logger.error(f"An error occurred while retrieving the Smoking Status observation resource: {exception_message(e)}")
+        raise ValueError(f"Found the following error pulling Observation FHIR resource: {exception_message(e)}") from e
 
 
+#### 路由
+## [GET] : height
+@router.get("/heights", name="Get Heights", description="Get heights (value + unit)")
+async def get_height_route(height=Depends(get_height)):
+    return height
+
+## [GET] : weight
+@router.get("/weights", name="Get Weights", description="Get weights (value + unit)")
+async def get_weight_route(weight=Depends(get_weight)):
+    return weight
+
+## [GET] : BMI
+@router.get("/bmi", name="Get Body Mass Index", description="Get body mass index (BMI) (value + unit)")
+async def get_bmi_route(bmi=Depends(get_bmi)):
+    return bmi
+
+## [GET] : BP
+@router.get("/bp", name="Get Blood Pressure", description="Get blood pressure (value + unit)")
+async def get_bp(sbp, dbp=Depends(get_bp)):
+    return sbp, dbp
+
+## [GET] : HDL
+@router.get("/hdl", name="Get High-density Lipoprotein", description="Get high-density lipoprotein (value + unit)")
+async def get_hdl_route(hdl=Depends(get_hdl)):
+    return hdl
+    
+## [GET] : LDL
+@router.get("/ldl", name="Get Low-density Lipoprotein", description="Get low-density lipoprotein (value + unit)")
+async def get_ldl_route(ldl=Depends(get_ldl)):
+    return ldl
+
+## [GET] : TG
+@router.get("/tg", name="Get Triglycerides", description="Get triglycerides (value + unit)")
+async def get_tg_route(tg=Depends(get_tg)):
+    return tg
+
+## [GET] : Cholesterol
+@router.get("/cholesterol", name="Get Cholesterol", description="Get cholesterol (value + unit)")
+async def get_chol_route(chol=Depends(get_chol)):
+    return chol
+
+## [GET] : SCr
+@router.get("/scr", name="Get Serum Creatinine (Cr/SCr)", description="Get serum creatinine (Cr/SCr) (value + unit)")
+async def get_scr_route(scr=Depends(get_scr)):
+    return scr
+
+## [GET] : Glucose
+@router.get("/glucose", name="Get Glucose (Blood Sugar)", description="Get glucose (blood sugar, BS) (value + unit)")
+def get_glucose_route(glucose=Depends(get_glucose)):
+    return glucose
+
+## [GET] : Smoking Status
+@router.get("/smoking-status", name="Get Smoking Status", description="Get smoking status")
+def get_smoking_status_route(smoking_status=Depends(get_smoking_status)):
+    return smoking_status
