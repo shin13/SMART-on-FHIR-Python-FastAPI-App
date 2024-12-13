@@ -5,7 +5,7 @@ from oauthlib.oauth2 import WebApplicationClient
 
 from app.configs.config import credentialSettings
 from app.middleware.exception import exception_message
-from app.middleware.function import fetch_observation
+from app.middleware.function import fetch_fhir_json
 
 
 router = APIRouter()
@@ -25,7 +25,7 @@ async def get_height(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
         
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -77,7 +77,7 @@ async def get_weight(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -129,7 +129,7 @@ async def get_bmi(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -180,7 +180,7 @@ async def get_bp(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -275,7 +275,7 @@ async def get_hdl(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -326,7 +326,7 @@ async def get_ldl(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -377,7 +377,7 @@ async def get_tg(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -428,7 +428,7 @@ async def get_chol(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -479,7 +479,7 @@ async def get_scr(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -531,7 +531,7 @@ def get_glucose(tokens):
     )
 
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
@@ -581,7 +581,7 @@ def get_smoking_status(tokens):
         headers={"Accept": "application/fhir+json"},
     )
     try:
-        obs_json = fetch_observation(uri, headers, body)
+        obs_json = fetch_fhir_json(uri, headers, body)
 
         # Bundle
         if obs_json.get("resourceType") == "Bundle" and obs_json.get("total", 0) > 0:
