@@ -1,15 +1,14 @@
+import os
+import sys
+import logging
+import typing
+import uuid
+import uvicorn
 import json
 import requests
-import uvicorn
 import httpx
-import uuid
 import asyncio
-import typing
-import os
-import logging
 from icecream import ic
-from datetime import datetime
-import sys
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -20,11 +19,8 @@ from oauthlib.oauth2 import WebApplicationClient
 
 from app.configs.config import basicSettings, credentialSettings
 from app.routers.v1.base import router_v1
-# from app.routers.v1.endpoints.get_patients import get_patient_data
-# from app.routers.v1.endpoints.get_patients_testing import get_patient_data
-from app.routers.v1.endpoints.get_patients_testing import extract_patient_info
-from app.routers.v1.endpoints.get_observations_testing import extract_height, extract_weight, extract_bmi, extract_bp, extract_hdl, extract_ldl, extract_tg, extract_chol, extract_scr, extract_glucose, extract_smoking_status
-# from app.routers.v1.endpoints.get_observations import get_height, get_weight
+from app.routers.v1.endpoints.get_patients import extract_patient_info
+from app.routers.v1.endpoints.get_observations import extract_height, extract_weight, extract_bmi, extract_bp, extract_hdl, extract_ldl, extract_tg, extract_chol, extract_scr, extract_glucose, extract_smoking_status
 from app.middleware.exception import exception_message
 
 
