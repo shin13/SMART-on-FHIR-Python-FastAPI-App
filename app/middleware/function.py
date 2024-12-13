@@ -1,66 +1,46 @@
-import json
-import logging
-from typing import Union, Dict, List
-from requests import get
-from requests.exceptions import RequestException
-from app.middleware.exception import exception_message
-
-
-class JSONParseError(Exception):
-    """Custom exception for JSON parsing errors."""
-    pass
-
-def parse_json_safely(data) -> Union[Dict, List]:
+async def extract_observation_data(fhir_json, observation_type):
     """
-    Safely parse JSON data and handle potential errors.
-    
+    Extracts the value and unit from a FHIR Observation resource.
+
     Args:
-    data: The data to be parsed as JSON.
-    logger: A logging.Logger instance for error logging.
-    
-    Returns:
-    Parsed JSON data.
-    
-    Raises:
-    JSONParseError: If JSON parsing fails.
-    """
-    system_logger = logging.getLogger('custom.error')
+        fhir_json (dict): The FHIR JSON resource.
+        observation_type (str): The type of observation to extract (e.g., "height", "weight", "bmi").
 
-    try:
-        return json.loads(data) if isinstance(data, str) else data.json()
-    except json.JSONDecodeError as e:
-        system_logger.error("JSON parsing error: Unable to parse resource")
-        raise JSONParseError("Data is not in valid JSON format. Maybe the permissions are set incorrectly or the app isn't registered correctly. Data not returned in JSON format. You probably haven't set the correct scope permissions, or registered the app with the EHR vendor so that it has access to this resource in Read or Search mode.") from e
-    
-
-def fetch_fhir_json(uri: str, headers: dict, body: dict):
-    """
-    Fetches observation data from a given FHIR URI.
-    
-    Args:
-        uri (str): The FHIR endpoint URI.
-        headers (dict): The headers to be sent with the request.
-        body (dict): The request body to be sent with the request.
-    
     Returns:
-        dict: Parsed observation data or an error message if the data is invalid.
+        str: The extracted observation value and unit, or an error message if the data is not found or invalid.
     """
+    # Bundle
+    if fhir_json.get("resourceType") == "Bundle" and fhir_json.get("total", 0) > 0:
+        try:
+            entry = fhir_json["entry"][0]["resource"]
+            value = entry.get("valueQuantity", {}).get("value")
+            unit = entry.get("valueQuantity", {}).get("unit")
+
+            if value is not None and unit is not None:
+                try:
+                    result = float(round(value, 1))
+                    return f"{result} {unit}"
+                except (TypeError, ValueError):
+                    return f"{observation_type.capitalize()} data is not a valid number"
+            
+            return f"Complete {observation_type} data not found"
+        
+        except (KeyError, IndexError):
+            return f"{observation_type.capitalize()} data format is incorrect"
+
+    # Single
     try:
-        response = get(uri, headers=headers, data=body, timeout=10)
-        response.raise_for_status()
-    except RequestException as e:
-        return {"error": f"Request failed: {exception_message(e)}"}
+        value = fhir_json.get("valueQuantity", {}).get("value")
+        unit = fhir_json.get("valueQuantity", {}).get("unit")
+        
+        if value is not None and unit is not None:
+            try:
+                result = float(round(value, 1))
+                return f"{result} {unit}"
+            except (TypeError, ValueError):
+                return f"{observation_type.capitalize()} data is not a valid number"
+        
+        return f"No {observation_type} data found"
     
-    fhir_json = parse_json_safely(response)
-    
-    if fhir_json["resourceType"] == "OperationOutcome":
-        raise ValueError(
-            """
-            The patient you selected does not have requested data available.
-            """
-        )
-    
-    if fhir_json.get("resourceType") not in ["Observation", "Bundle"]:
-        return {"error": "No valid FHIR data were found"}
-    
-    return fhir_json
+    except Exception:
+        return f"An unknown error occurred while processing {observation_type} data"
