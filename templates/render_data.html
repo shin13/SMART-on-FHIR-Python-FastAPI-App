@@ -30,53 +30,53 @@
           </tr>
           {% endfor %}
         </table>
-        <h3>心臟病風險計算</h3>
+        <h3>Heart Disease Risk Calculation</h3>
         <div id="questions">
           <table>
             <tr>
-              <p>請回答以下問題：</p>
+              <p>Please answer the following questions:</p>
             </tr>
             <tr>
-              <td>是否患有糖尿病？</td>
+              <td>Do you have diabetes?</td>
               <td>
                   <input type="radio" id="diabetesYes" name="diabetes" value="yes">
-                  <label for="diabetesYes">是</label>
+                  <label for="diabetesYes">Yes</label>
               </td>
               <td>
                   <input type="radio" id="diabetesNo" name="diabetes" value="no">
-                  <label for="diabetesNo">否</label>
+                  <label for="diabetesNo">No</label>
               </td>
-              <td id="diabetesError" class="error hidden">請選擇其中一項。</td>
+              <td id="diabetesError" class="error hidden">Please select one option.</td>
             </tr>
             <tr>
-              <td>是否吸煙？</td>
+              <td>Do you smoke?</td>
               <td>
                   <input type="radio" id="smokingYes" name="smoking" value="yes">
-                  <label for="smokingYes">是</label>
+                  <label for="smokingYes">Yes</label>
               </td>
               <td>
                   <input type="radio" id="smokingNo" name="smoking" value="no">
-                  <label for="smokingNo">否</label>
+                  <label for="smokingNo">No</label>
               </td>
-              <td id="smokingError" class="error hidden">請選擇其中一項。</td>
+              <td id="smokingError" class="error hidden">Please select one option.</td>
             </tr>
             <tr>
-              <td>是否正在服藥治療高血壓？</td>
+              <td>Are you currently taking medication for hypertension?</td>
               <td>
                   <input type="radio" id="treatingHTNYes" name="treatingHTN" value="yes">
-                  <label for="treatingHTNYes">是</label>
+                  <label for="treatingHTNYes">Yes</label>
               </td>
               <td>
                   <input type="radio" id="treatingHTNNo" name="treatingHTN" value="no">
-                  <label for="treatingHTNNo">否</label>
+                  <label for="treatingHTNNo">No</label>
               </td>
-              <td id="treatingHTNError" class="error hidden">請選擇其中一項。</td>
+              <td id="treatingHTNError" class="error hidden">Please select one option.</td>
             </tr>
           </table>
-          <button id="submitAnswers">提交</button>
+          <button id="submitAnswers">Submit</button>
         </div>
         <div id="result" class="hidden">
-          <h3>計算結果</h3>
+          <h3>Calculation Result</h3>
           <p id="riskResult"></p>
         </div>
       </div> <!-- Close bodyCtr -->
