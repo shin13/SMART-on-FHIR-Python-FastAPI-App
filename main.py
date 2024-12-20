@@ -8,7 +8,6 @@ import json
 import requests
 import httpx
 import asyncio
-from icecream import ic
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -19,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from oauthlib.oauth2 import WebApplicationClient
 
 from app.configs.config import basicSettings, credentialSettings
+from app.models.model import UserRiskInput
 from app.routers.v1.base import router_v1
 from app.routers.v1.endpoints.get_patients import extract_patient_info
 from app.routers.v1.endpoints.get_observations import extract_height, extract_weight, extract_bmi, extract_bp, extract_hdl, extract_ldl, extract_tg, extract_chol, extract_scr, extract_glucose, extract_smoking_status
@@ -26,7 +26,6 @@ from app.routers.v1.endpoints.get_calculations import get_ibw_abw, get_crcl, get
 from app.middleware.exception import exception_message
 
 
-sys.path.append("./")
 
 app = FastAPI(
     version=basicSettings.VERSION,
@@ -42,7 +41,6 @@ system_logger = logging.getLogger('custom.error')
 app.include_router(router_v1, prefix=basicSettings.API_PREFIX)
 
 origins = ["http://localhost"]
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -51,6 +49,7 @@ app.add_middleware(
     allow_headers=['*']
 )
 
+sys.path.append("./")
 # 啟用靜態文件
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -77,13 +76,9 @@ async def serve_static(filename: str):
 async def index(launch: str = "", iss: str = ""):
     if iss != credentialSettings.BASE_URL:
         raise HTTPException(status_code=400, detail=f"ISS link is {iss}, but the app's registered link is {credentialSettings.BASE_URL}")
-    ic(launch)
-    ic(iss)
-    ic(cookie)
+    
     cookie["launch_token"] = launch
-    ic(launch)
-    ic(iss)
-    ic(cookie)
+
     return RedirectResponse(url="/authorize")  # 重定向到授權端點
 
 
@@ -296,7 +291,6 @@ async def get_calculations(request: Request):
 ### 5. 完成授權流程、渲染資料
 @app.get("/render_data", response_class=HTMLResponse)
 async def render_data(request: Request):
-
     # Fetch the records using the get_records function
     records_response = await get_records(request)
 
@@ -312,9 +306,6 @@ async def render_data(request: Request):
         return templates.TemplateResponse("error.html", {"request": request, "error": calculations_response["error"]})
 
     calculations = calculations_response
-
-    ic(records)
-    ic(calculations)
     output = templates.TemplateResponse(name="render_data.html", context={"request": request, "data": records, "calc_data": calculations})
 
     return output
@@ -353,31 +344,23 @@ async def get_fhir_json(patient_token, resource_type, category=None, code=None) 
         raise ValueError("resource_type must be either 'Patient' or 'Observation'")
 
     base_url = f"{credentialSettings.BASE_URL}/{resource_type}"
-    ic(base_url)
 
     if resource_type == 'Observation':
         if not category and not code:
             raise ValueError("For Observation, at least one of category or code must be provided")
 
         params = [f"patient={patient_token}"]
-        ic("ORIGINAL PARAMS", params)
 
         if category:
             params.append(f"category={category}")
         if code:
             params.append(f"code={code}")
-        
-        ic("MODIFIED PARAMS", params)
 
-        query_string = "&".join(params) 
-        ic(query_string)
-
+        query_string = "&".join(params)  
         full_url = f"{base_url}?{query_string}"
     
     elif resource_type == 'Patient':
         full_url = f"{base_url}/{patient_token}"
-    
-    ic(full_url)
 
     # 添加認證令牌
     try:
@@ -386,24 +369,18 @@ async def get_fhir_json(patient_token, resource_type, category=None, code=None) 
             headers={"Accept": "application/fhir+json"}
         )
     except Exception as e:
-        ic(f"Error adding token: {exception_message(e)}")
-        raise
+        raise HTTPException(status_code=500, detail=f"Error adding token: {exception_message(e)}")
 
     # 發送 HTTP 請求並獲取數據
     try:
-        ic("Sending HTTP request")
         # Getting data in the way prescribed by OAuthLib package
         async with httpx.AsyncClient() as asynclient:
             # response = await asynclient.get(uri, headers=headers, data=body, timeout=10)
             response = await asynclient.get(uri, headers=headers, timeout=10)
             if response.status_code != 200:
                 raise HTTPException(status_code=response.status_code, detail="Failed to load patient data.")
-            ic(f"Response status code: {response.status_code}")
 
             fhir_json = response.json()
-
-        ic("FHIR JSON received")
-        ic(fhir_json)
 
     except httpx.RequestError as e:
         system_logger.error(f"HTTP request failed: {exception_message(e)}")
@@ -421,27 +398,14 @@ async def get_fhir_json(patient_token, resource_type, category=None, code=None) 
     return fhir_json
 
 
-from pydantic import BaseModel
-
-class UserRiskInput(BaseModel):
-    hasDiabetes: bool = False
-    isSmoking: bool = False
-    isTreatingHypertension: bool = False
-    
-
 #### 路由
 ## [POST] : ascvd 2013 risk
 @app.post("/calculate_ascvd_risk", name="Get ASCVD 2013 Risk", description="Get ASCVD 2013 Risk in a dictionary: {'result': risk_result}")
 async def calculate_ascvd_risk(request: Request, user_input: UserRiskInput):
-
-    ic(request)
-    ic(user_input)
-
     try:
         has_diabetes = user_input.hasDiabetes
         is_smoking = user_input.isSmoking
         is_treating_htn = user_input.isTreatingHypertension
-
 
         # 確認這些變數的類型是否正確
         if not isinstance(has_diabetes, bool) or not isinstance(is_smoking, bool) or not isinstance(is_treating_htn, bool):
@@ -476,8 +440,6 @@ async def calculate_ascvd_risk(request: Request, user_input: UserRiskInput):
                 risk_result = f"Risk of cardiovascular event (coronary or stroke death or non-fatal MI or stroke) in next 10 years: {risk_percentage:.1f}%"
             else:
                 risk_result = "Unable to determine the risk of cardiovascular event in next 10 years."
-            
-            ic(risk_result)
 
             return jsonable_encoder({"result": risk_result})
 
