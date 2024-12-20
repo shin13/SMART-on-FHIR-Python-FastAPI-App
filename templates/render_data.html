@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SMART on FHIR app with Python / FastAPI (Testing)</title>
+    <title>SMART on FHIR app</title>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
     <div id="mainCtr">
       <div id="headerCtr">
         <h1>SMART on FHIR starter app</h1>
-      </div> <!-- 关闭 headerCtr -->
+      </div> <!-- Close headerCtr -->
       <div id="bodyCtr">
         <h2>Basic Information</h2>
         <table>
@@ -21,8 +21,67 @@
           </tr>
           {% endfor %}
         </table>
-      </div> <!-- 关闭 bodyCtr -->
-    </div> <!-- 关闭 mainCtr -->
+        <h2>Calculation</h2>
+        <table>
+          {% for key, value in calc_data.items() %}
+          <tr>
+            <td>{{ key }}</td>
+            <td>{{ value }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+        <h3>心臟病風險計算</h3>
+        <div id="questions">
+          <table>
+            <tr>
+              <p>請回答以下問題：</p>
+            </tr>
+            <tr>
+              <td>是否患有糖尿病？</td>
+              <td>
+                  <input type="radio" id="diabetesYes" name="diabetes" value="yes">
+                  <label for="diabetesYes">是</label>
+              </td>
+              <td>
+                  <input type="radio" id="diabetesNo" name="diabetes" value="no">
+                  <label for="diabetesNo">否</label>
+              </td>
+              <td id="diabetesError" class="error hidden">請選擇其中一項。</td>
+            </tr>
+            <tr>
+              <td>是否吸煙？</td>
+              <td>
+                  <input type="radio" id="smokingYes" name="smoking" value="yes">
+                  <label for="smokingYes">是</label>
+              </td>
+              <td>
+                  <input type="radio" id="smokingNo" name="smoking" value="no">
+                  <label for="smokingNo">否</label>
+              </td>
+              <td id="smokingError" class="error hidden">請選擇其中一項。</td>
+            </tr>
+            <tr>
+              <td>是否正在服藥治療高血壓？</td>
+              <td>
+                  <input type="radio" id="treatingHTNYes" name="treatingHTN" value="yes">
+                  <label for="treatingHTNYes">是</label>
+              </td>
+              <td>
+                  <input type="radio" id="treatingHTNNo" name="treatingHTN" value="no">
+                  <label for="treatingHTNNo">否</label>
+              </td>
+              <td id="treatingHTNError" class="error hidden">請選擇其中一項。</td>
+            </tr>
+          </table>
+          <button id="submitAnswers">提交</button>
+        </div>
+        <div id="result" class="hidden">
+          <h3>計算結果</h3>
+          <p id="riskResult"></p>
+        </div>
+      </div> <!-- Close bodyCtr -->
+    </div> <!-- Close mainCtr -->
+    <script src="/templates/calculate_ascvd_risk.js"></script>
   </body>
   <footer></footer>
 </html>

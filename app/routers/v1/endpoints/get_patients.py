@@ -77,3 +77,4 @@ async def extract_patient_info(fhir_json):
         raise ValueError(f"Found the following error pulling Paitent FHIR resource: {exception_message(e)}") from e
 
     return given_name, family_name, birth_date, age, gender, race, ethnicity
+

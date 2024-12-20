@@ -3,7 +3,8 @@ from starlette.responses import JSONResponse
 
 from app.routers.v1.endpoints import (
     get_patients,
-    get_observations
+    get_observations,
+    get_calculations
 )
 
 
@@ -17,3 +18,4 @@ async def test():
 
 router_v1.include_router(get_patients.router, prefix="/get-patients", tags=["Get Patients"])
 router_v1.include_router(get_observations.router, prefix="/get-observations", tags=["Get Observations"])
+router_v1.include_router(get_calculations.router, prefix="/get-calculations", tags=["Get Calculations"])

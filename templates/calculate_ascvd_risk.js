@@ -57,6 +57,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const isSmoking = document.querySelector('input[name="smoking"]:checked')?.value === 'yes';
             const isTreatingHypertension = document.querySelector('input[name="treatingHTN"]:checked')?.value === 'yes';
 
+            // fetch('/calculate_ascvd_risk', {
+            //     method: 'POST',
+            //     headers: {
+            //         'Content-Type': 'application/json',
+            //     },
+            //     body: JSON.stringify({
+            //         hasDiabetes: hasDiabetes,
+            //         isSmoking: isSmoking,
+            //         isTreatingHypertension: isTreatingHypertension
+            //     }),
+            // })
+            // .then(response => response.json())
+            // .then(data => {
+            //     resultElement.textContent = data.result;
+            //     resultDiv.classList.remove('hidden');
+            // })
             fetch('/calculate_ascvd_risk', {
                 method: 'POST',
                 headers: {
@@ -68,15 +84,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     isTreatingHypertension: isTreatingHypertension
                 }),
             })
-            .then(response => response.json())
-            .then(data => {
-                resultElement.textContent = data.result;
-                resultDiv.classList.remove('hidden');
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.status);
+                }
+                return response.json();
             })
-            .catch((error) => {
-                console.error('Error:', error);
-                handleError("An error occurred during the calculation. Please try again later."); // Handle fetch errors gracefully
+            .then(data => {
+                if (data.error) {
+                    console.error('Error from server:', data.error);
+                    resultElement.textContent = 'Error: ' + data.error;
+                } else {
+                    resultElement.textContent = data.result;
+                    resultDiv.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                resultElement.textContent = 'Fetch error: ' + error.message;
             });
+            // .catch((error) => {
+            //     console.error('Error:', error);
+            //     handleError("An error occurred during the calculation. Please try again later."); // Handle fetch errors gracefully
+            // });
         } else {
             handleError("There are unanswered questions.");
         }

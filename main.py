@@ -11,6 +11,7 @@ import asyncio
 from icecream import ic
 
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +22,7 @@ from app.configs.config import basicSettings, credentialSettings
 from app.routers.v1.base import router_v1
 from app.routers.v1.endpoints.get_patients import extract_patient_info
 from app.routers.v1.endpoints.get_observations import extract_height, extract_weight, extract_bmi, extract_bp, extract_hdl, extract_ldl, extract_tg, extract_chol, extract_scr, extract_glucose, extract_smoking_status
+from app.routers.v1.endpoints.get_calculations import get_ibw_abw, get_crcl, get_ost_index, get_mets_ir, _calculate_ln_values, _get_mean_coefficient_value, _get_baseline_survival, _determine_population_group, _calculate_ascvd_risk
 from app.middleware.exception import exception_message
 
 
@@ -75,9 +77,13 @@ async def serve_static(filename: str):
 async def index(launch: str = "", iss: str = ""):
     if iss != credentialSettings.BASE_URL:
         raise HTTPException(status_code=400, detail=f"ISS link is {iss}, but the app's registered link is {credentialSettings.BASE_URL}")
-    
+    ic(launch)
+    ic(iss)
+    ic(cookie)
     cookie["launch_token"] = launch
-
+    ic(launch)
+    ic(iss)
+    ic(cookie)
     return RedirectResponse(url="/authorize")  # 重定向到授權端點
 
 
@@ -147,10 +153,8 @@ async def callback(request: Request):
         return {"error": f"An error occurred when obtaining an access token: {e}"}
 
 
-### 5. 完成授權流程
-# @app.post("/render_data", response_class=HTMLResponse)
-@app.get("/render_data", response_class=HTMLResponse)
-async def render_data(request: Request):
+@app.get("/get_records", response_model=dict)
+async def get_records(request: Request):
 
     tokens = cookie.get("token")
 
@@ -208,34 +212,116 @@ async def render_data(request: Request):
         smoking = await extract_smoking_status (results[10])
 
     except Exception as e:
-        return {"error": f"An error occurred when obtaining data for rendering: {exception_message(e)}"}
+            return {"error": f"An error occurred when obtaining data for rendering: {exception_message(e)}"}
+    
+    try:
+        records = {
+            "Name": f"{first_name} {last_name}",
+            "Gender": gender,
+            "Race": race,
+            "Ethnicity": ethnicity,
+            "Date of Birth": dob,
+            "Age": age,
+            "Height": height,
+            "Weight": weight,
+            "BMI": bmi,
+            "Systolic BP": dbp,
+            "Diastolic BP": sbp,
+            "HDL": hdl,
+            "LDL": ldl,
+            "Triglycerides": tg, 
+            "Cholesterol": chol,
+            "Creatinine": scr,
+            "Glucose (blood sugar)": glucose,
+            "Tobacco Smoking Status": smoking,
+        }
 
-    records = {
-        "Name": f"{first_name} {last_name}",
-        "Gender": gender,
-        "Race": race,
-        "Ethnicity": ethnicity,
-        "Date of Birth": dob,
-        "Age": age,
-        "Height": height,
-        "Weight": weight,
-        "BMI": bmi,
-        "Systolic BP": dbp,
-        "Diastolic BP": sbp,
-        "HDL": hdl,
-        "LDL": ldl,
-        "Triglycerides": tg, 
-        "Cholesterol": chol,
-        "Creatinine": scr,
-        "Glucose (blood sugar)": glucose,
-        "Tobacco Smoking Status": smoking,
-    }
+        return records  # Return the records as JSON response
+
+    except Exception as e:
+        return {"error": f"An error occurred when obtaining records: {exception_message(e)}"}
+
+
+@app.get("/get_calculations", response_model=dict)
+async def get_calculations(request: Request):
+    try:
+        records_response = await get_records(request)
+
+        if "error" in records_response:
+            return templates.TemplateResponse("error.html", {"request": request, "error": records_response["error"]})
+
+        records = records_response  # Extract the records for rendering
+
+    except Exception as e:
+        return {"error": f"An error occurred when obtaining records: {exception_message(e)}"}
+    
+    try:
+        # Extract necessary fields from records
+        gender = records["Gender"]
+        height = records["Height"]  
+        weight = records["Weight"]
+        age = records["Age"]
+        scr = records.get("Creatinine")
+        glucose = records.get("Glucose (blood sugar)")
+        tg = records.get("Triglycerides")
+        hdl = records.get("HDL")
+
+        # Get calculation output
+        ibw = get_ibw_abw(gender, height, weight)[0]
+        abw = get_ibw_abw(gender, height, weight)[1]
+        actual_clcr = get_crcl(age, weight, gender, height, scr)[0]
+        adjusted_clcr = get_crcl(age, weight, gender, height, scr)[1] + "  " + get_crcl(age, weight, gender, height, scr)[3]
+        ost_risk = get_ost_index(weight, age, gender)[1]
+        ost_index = get_ost_index(weight, age, gender)[0]
+        t2d_risk = get_mets_ir(glucose, tg, weight, height, hdl)[1]
+        mets_ir = get_mets_ir(glucose, tg, weight, height, hdl)[0]
+
+        calculations = {
+            "Ideal Body Weight (IBW)": ibw,
+            "Adjusted Body Weight (ABW)": abw,
+            "Creatinine Clearance": actual_clcr,
+            "Creatinine Clearance (adjusted)": adjusted_clcr,
+            "Osteoporosis Risk": ost_risk,
+            "OST Index": ost_index,
+            "Risk of Developing T2D (METS-IR)": t2d_risk,
+            "METS-IR Value (Metabolic Score for Insulin Resistance)": mets_ir,
+        }
+
+        return calculations
+    
+    except Exception as e:
+        return {"error": f"An error occurred when generating calculations: {exception_message(e)}"}
+
+
+### 5. 完成授權流程、渲染資料
+@app.get("/render_data", response_class=HTMLResponse)
+async def render_data(request: Request):
+
+    # Fetch the records using the get_records function
+    records_response = await get_records(request)
+
+    if "error" in records_response:
+        return templates.TemplateResponse("error.html", {"request": request, "error": records_response["error"]})
+
+    records = records_response
+
+    # Fetch the calculations using the get_calculations function
+    calculations_response = await get_calculations(request)
+
+    if "error" in calculations_response:
+        return templates.TemplateResponse("error.html", {"request": request, "error": calculations_response["error"]})
+
+    calculations = calculations_response
 
     ic(records)
+    ic(calculations)
+    output = templates.TemplateResponse(name="render_data.html", context={"request": request, "data": records, "calc_data": calculations})
 
-    return templates.TemplateResponse(name="render_data.html", context={"request": request, "data": records})
+    return output
 
 
+## [GET]: Get fhir json
+@app.get("/fhir-json", tags=["Get FHIR Json"])
 async def get_fhir_json(patient_token, resource_type, category=None, code=None) -> dict:
     """
      獲取 FHIR JSON 資源。
@@ -335,10 +421,80 @@ async def get_fhir_json(patient_token, resource_type, category=None, code=None) 
     return fhir_json
 
 
+from pydantic import BaseModel
+
+class UserRiskInput(BaseModel):
+    hasDiabetes: bool = False
+    isSmoking: bool = False
+    isTreatingHypertension: bool = False
+    
+
+#### 路由
+## [POST] : ascvd 2013 risk
+@app.post("/calculate_ascvd_risk", name="Get ASCVD 2013 Risk", description="Get ASCVD 2013 Risk in a dictionary: {'result': risk_result}")
+async def calculate_ascvd_risk(request: Request, user_input: UserRiskInput):
+
+    ic(request)
+    ic(user_input)
+
+    try:
+        has_diabetes = user_input.hasDiabetes
+        is_smoking = user_input.isSmoking
+        is_treating_htn = user_input.isTreatingHypertension
+
+
+        # 確認這些變數的類型是否正確
+        if not isinstance(has_diabetes, bool) or not isinstance(is_smoking, bool) or not isinstance(is_treating_htn, bool):
+            return jsonable_encoder({"error": "Invalid input data types for user risk factors."}), 400
+            
+        try:
+            # 取得用戶的健康記錄 (可從 get_records 函數中獲得)
+            records = await get_records(request)
+
+            # 提取數據
+            race = records.get("Race", "").strip()
+            gender = records.get("Gender", "").strip()
+            age = records.get("Age", 0)
+            cholesterol = float(records.get("Cholesterol", "0").split(" ")[0])
+            hdl = float(records.get("HDL", "0").split(" ")[0])
+            sbp = float(records.get("Systolic BP", "0").split(" ")[0])
+
+            # 計算 ASCVD 風險百分比
+            group = _determine_population_group(race, gender)
+            ln_values = _calculate_ln_values(race, gender, age, cholesterol, hdl, sbp, has_diabetes, is_smoking, is_treating_htn)
+            value_sum = round(sum(ln_values.values()), 2)
+            mean_coefficient_value = _get_mean_coefficient_value(group)
+            baseline_survival = _get_baseline_survival(group)
+            
+            if mean_coefficient_value is None or baseline_survival is None:
+                return {"error": "Unable to determine population group or retrieve coefficients."}, 500
+
+            risk_percentage = _calculate_ascvd_risk(value_sum, mean_coefficient_value, baseline_survival)
+            
+            # 生成風險回應文本
+            if risk_percentage is not None:
+                risk_result = f"Risk of cardiovascular event (coronary or stroke death or non-fatal MI or stroke) in next 10 years: {risk_percentage:.1f}%"
+            else:
+                risk_result = "Unable to determine the risk of cardiovascular event in next 10 years."
+            
+            ic(risk_result)
+
+            return jsonable_encoder({"result": risk_result})
+
+        except Exception as e:
+            # 如果在處理 JSON 請求或計算中出現錯誤，將錯誤訊息回傳給前端
+            system_logger.error(f"Error during risk calculation: {exception_message(e)}")
+            return jsonable_encoder({"error": f"Error during risk calculation: {exception_message(e)}"}), 500
+
+    except Exception as e:
+        # 如果在獲取記錄或健康數據時出現錯誤，回傳錯誤訊息
+        return jsonable_encoder({"error": f"Server error: {exception_message(e)}"}), 500
+    
+
 if __name__ == "__main__":
 
-    import os
-    import logging
+    # import os
+    # import logging
     
     # # This creates a secret key (needed for session to work)
     # app.secret_key = os.urandom(24)
@@ -346,7 +502,7 @@ if __name__ == "__main__":
     # # This is to allow for endpoints to be http instead of https
     # os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-    logging.basicConfig(level=logging.DEBUG)
+    # logging.basicConfig(level=logging.DEBUG)
 
     uvicorn.run(
         "main:app",
