@@ -1,5 +1,3 @@
-from pydantic.v1 import BaseSettings
-
 class Settings():
     VERSION: str = "beta0.1"
     API_PREFIX: str = "/api/v1"
